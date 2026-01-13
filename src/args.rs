@@ -60,7 +60,6 @@ pub enum Commands {
     },
     /// Get codes for all/alias records
     Ls {
-        #[clap(short = 'a', long)]
         alias: Option<String>,
         #[clap(short, long)]
         quiet: bool,
