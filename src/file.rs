@@ -41,7 +41,7 @@ pub fn read_file_to_vec(path: &Path) -> io::Result<Vec<String>> {
 
 pub fn append_to_file(path: &Path, data: &str) -> io::Result<()> {
     let mut data_file = OpenOptions::new().append(true).open(path)?;
-    writeln!(data_file, "{}", data.trim())
+    writeln!(data_file, "{}", data)
 }
 
 pub fn overwrite_file(path: &Path, data: &str) -> io::Result<()> {
