@@ -45,7 +45,8 @@ pub fn append_to_file(path: &Path, data: &str) -> io::Result<()> {
 }
 
 pub fn overwrite_file(path: &Path, data: &str) -> io::Result<()> {
-    std::fs::write(path, data)
+    let line = String::from(data) + "\n";
+    std::fs::write(path, line)
 }
 
 pub fn alias_exists(alias: &str, path: &Path) -> bool {
