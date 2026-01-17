@@ -135,25 +135,29 @@ pub fn remove(path: &Path, alias: &str) -> Result<(), String> {
     file::create_routine_backup(path)
         .map_err(|e| format!("Warning: Backup failed: {}", e))?;
 
-    let lines = file::read_file_to_vec(&path)
-        .map_err(|e| e.to_string())?;
-    let original_len = lines.len();
+    let records = file::read_codex(path)?;
+    let original_len = records.len();
 
-    let filtered_lines: Vec<String> = lines.into_iter()
-        .filter(|l| {
-            Record::from_line(l)
-                .map(|r| r.alias != alias)
-                .unwrap_or(true)
-        })
+    let filtered_records: Vec<Record> = records
+        .into_iter()
+        .filter(|r| r.alias != alias)
         .collect();
 
-    if filtered_lines.len() == original_len {
+    if filtered_records.len() == original_len {
         return Err(format!("Error: No record for '{alias}' found"));
     }
 
-    let data = filtered_lines.join("\n") + "\n";
+    // Convert the Records back to JSON
+    let lines: Vec<String> = filtered_records
+        .iter()
+        .map(|r| serde_json::to_string(r).unwrap_or_default())
+        .collect();
+
+    let data = lines.join("\n") + "\n";
+
     file::overwrite_file(path, &data)
         .map_err(|e| format!("Error: Failed to save changes: {e}"))?;
+
     println!("Record for {alias} removed.");
     Ok(())
 }
@@ -166,10 +170,7 @@ pub fn ls(
     format: &OutputFormat,
     quiet: bool,
 ) -> Result<(), String> {
-    let lines = file::read_file_to_vec(path)
-        .map_err(|_| "Codex not found.")?;
-    let records: Vec<Record> = lines.iter()
-        .filter_map(|l| Record::from_line(l)).collect();
+    let records = file::read_codex(path)?;
 
     // apply search filter
     let filtered: Vec<&Record> = records.iter()
@@ -260,24 +261,23 @@ pub fn migrate(path: &PathBuf) -> io::Result<()> {
     println!("Backup created at {:?}", backup_path);
 
     // read and parse everything using the hybrid parser
-    let lines = file::read_file_to_vec(path)?;
-    let mut migrated_records = Vec::new();
-    let mut count = 0;
+    let records = file::read_codex(path)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    for line in lines {
-        if let Some(record) = Record::from_line(&line) {
-            // re-serialize to JSON string
-            let json = serde_json::to_string(&record).expect("Failed to serialize");
-            migrated_records.push(json);
-            count += 1;
-        }
-    }
+    let migrated_records: Vec<String> = records
+        .iter()
+        .map(|record| serde_json::to_string(record).expect("Failed to serialize"))
+        .collect();
 
-    // write back to the original file
+    let count = migrated_records.len();
+
     let new_content = migrated_records.join("\n") + "\n";
+
+    // Write back to the original file
     file::overwrite_file(path, &new_content)?;
 
     println!("Successfully migrated {count} records to JSON format.");
+
     Ok(())
 }
 
@@ -292,18 +292,33 @@ pub fn rename(path: &PathBuf, old_alias: &str, new_alias: &str) -> Result<(), St
     }
 
     // read the file
-    let lines = file::read_file_to_vec(path).map_err(|e| e.to_string())?;
-    let mut target_record = lines.iter()
-        .filter_map(|l| Record::from_line(l))
-        .find(|r| r.alias == old_alias)
-        .ok_or_else(|| format!("Alias '{}' not found.", old_alias))?;
+    let mut records = file::read_codex(path)?;
+    let mut found = false;
 
-    target_record.alias = new_alias.to_string();
+    for record in records.iter_mut() {
+        if record.alias == old_alias {
+            record.alias = new_alias.to_string();
+            found = true;
+            break; 
+        }
+    }
 
-    remove(path, old_alias)?;
+    if !found {
+        return Err(format!("Alias '{}' not found.", old_alias));
+    }
 
-    let json_data = serde_json::to_string(&target_record).map_err(|e| e.to_string())?;
-    file::append_to_file(path, &json_data).map_err(|e| e.to_string())?;
+    file::create_routine_backup(path)
+        .map_err(|e| format!("Warning: Backup failed: {}", e))?;
+
+    let lines: Vec<String> = records
+        .iter()
+        .map(|r| serde_json::to_string(r).expect("Failed to serialize"))
+        .collect();
+
+    let data = lines.join("\n") + "\n";
+
+    file::overwrite_file(path, &data)
+        .map_err(|e| format!("Error saving changes: {e}"))?;
 
     println!("Successfully renamed '{}' to '{}'", old_alias, new_alias);
     Ok(())

@@ -1,5 +1,6 @@
 use crate::models::Record;
 use dirs;
+use serde_json::Deserializer;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -37,6 +38,18 @@ pub fn read_file_to_vec(path: &Path) -> io::Result<Vec<String>> {
                 format!("Error reading codex at {:?}: {e}", path),
             )
         })
+}
+
+pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| format!("Could not open codex: {}", e))?;
+
+    let records = Deserializer::from_reader(file)
+        .into_iter::<Record>()
+        .filter_map(|result| result.ok()) // Skips malformed lines gracefully
+        .collect();
+
+    Ok(records)
 }
 
 pub fn append_to_file(path: &Path, data: &str) -> io::Result<()> {
