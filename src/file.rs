@@ -41,15 +41,27 @@ pub fn read_file_to_vec(path: &Path) -> io::Result<Vec<String>> {
 }
 
 pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
-    let file = std::fs::File::open(path)
-        .map_err(|e| format!("Could not open codex: {}", e))?;
+    let content = std::fs::read_to_string(path)
+        .map_err(|_| "Codex not found.")?;
 
-    let records = Deserializer::from_reader(file)
+    if content.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // detect Legacy format
+    if !content.trim_start().starts_with('{') && content.contains(':') {
+        return Err(
+            "Legacy file format detected! \n\
+             Please run 'hermes migrate' to upgrade your codex to the new JSON format."
+            .to_string()
+        );
+    }
+
+    // JSON parsing
+    let records: Vec<Record> = Deserializer::from_str(&content)
         .into_iter::<Record>()
-        .filter_map(|result| result.ok()) // Skips malformed lines gracefully
+        .filter_map(|r| r.ok())
         .collect();
-
-    // TODO: add support of legacy format until next version!
 
     Ok(records)
 }
