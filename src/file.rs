@@ -1,8 +1,8 @@
 use crate::models::Record;
 use dirs;
 use serde_json::Deserializer;
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, Write};
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,22 +22,6 @@ pub fn get_default_path() -> PathBuf {
 
 pub fn file_exists(path: &Path) -> bool {
     path.exists()
-}
-
-fn read_lines<P: AsRef<Path>>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-pub fn read_file_to_vec(path: &Path) -> io::Result<Vec<String>> {
-    read_lines(path)?
-        .collect::<io::Result<Vec<String>>>()
-        .map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("Error reading codex at {:?}: {e}", path),
-            )
-        })
 }
 
 pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
