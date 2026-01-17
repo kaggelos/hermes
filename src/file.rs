@@ -49,6 +49,8 @@ pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
         .filter_map(|result| result.ok()) // Skips malformed lines gracefully
         .collect();
 
+    // TODO: add support of legacy format until next version!
+
     Ok(records)
 }
 
@@ -63,13 +65,9 @@ pub fn overwrite_file(path: &Path, data: &str) -> io::Result<()> {
 }
 
 pub fn alias_exists(alias: &str, path: &Path) -> bool {
-    read_file_to_vec(path)
-        .map(|lines| {
-            lines.iter().any(|line| {
-                Record::from_line(line)
-                    .map(|r| r.alias == alias)
-                    .unwrap_or(false)
-            })
+    read_codex(path)
+        .map(|records| {
+            records.iter().any(|r| r.alias == alias)
         })
         .unwrap_or(false)
 }
