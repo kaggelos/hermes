@@ -25,8 +25,7 @@ pub fn file_exists(path: &Path) -> bool {
 }
 
 pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|_| "Codex not found.")?;
+    let content = std::fs::read_to_string(path).map_err(|_| "Codex not found.")?;
 
     if content.is_empty() {
         return Ok(Vec::new());
@@ -34,11 +33,9 @@ pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
 
     // detect Legacy format
     if !content.trim_start().starts_with('{') && content.contains(':') {
-        return Err(
-            "Legacy file format detected! \n\
+        return Err("Legacy file format detected! \n\
              Please run 'hermes migrate' to upgrade your codex to the new JSON format."
-            .to_string()
-        );
+            .to_string());
     }
 
     // JSON parsing
@@ -62,9 +59,7 @@ pub fn overwrite_file(path: &Path, data: &str) -> io::Result<()> {
 
 pub fn alias_exists(alias: &str, path: &Path) -> bool {
     read_codex(path)
-        .map(|records| {
-            records.iter().any(|r| r.alias == alias)
-        })
+        .map(|records| records.iter().any(|r| r.alias == alias))
         .unwrap_or(false)
 }
 
@@ -108,4 +103,20 @@ pub fn create_snapshot_backup(path: &Path) -> io::Result<PathBuf> {
         .as_secs();
 
     perform_backup(path, &format!("{}.bak", timestamp))
+}
+
+pub fn read_legacy_raw(path: &Path) -> Result<Vec<Record>, String> {
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Could not read codex: {}", e))?;
+
+    let records: Vec<Record> = content
+        .lines()
+        .filter_map(|line| Record::from_legacy_line(line))
+        .collect();
+
+    if records.is_empty() && !content.trim().is_empty() {
+        return Err("No legacy records found to migrate, or file is already JSON.".to_string());
+    }
+
+    Ok(records)
 }

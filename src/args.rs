@@ -39,9 +39,7 @@ pub enum Commands {
         encryption: EncryptArgs,
     },
     /// Remove code from the hermes
-    Remove {
-        alias: String,
-    },
+    Remove { alias: String },
     /// Update code by alias
     Update {
         alias: String,

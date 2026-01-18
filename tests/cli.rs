@@ -1,7 +1,7 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use tempfile::NamedTempFile;
 use std::io::Write;
+use tempfile::NamedTempFile;
 
 const CODE: &str = "BQZH47HMIUUQOQVAXO3MCRUP3OGR3OIL";
 const ALIAS: &str = "test_simple";
@@ -33,7 +33,7 @@ fn fail_run_with_no_args() -> Result<(), Box<dyn std::error::Error>> {
 fn fail_add_missing_args() -> Result<(), Box<dyn std::error::Error>> {
     let file = NamedTempFile::new()?;
     let path = file.path();
-    
+
     // 'add' fails without -a and -c
     hermes(path)
         .arg("--path")
@@ -42,7 +42,9 @@ fn fail_add_missing_args() -> Result<(), Box<dyn std::error::Error>> {
         .assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains("the following required arguments were not provided"));
+        .stderr(predicate::str::contains(
+            "the following required arguments were not provided",
+        ));
 
     Ok(())
 }
@@ -63,7 +65,10 @@ fn add_remove_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
         .args(&[ALIAS])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("Record for {} removed.", ALIAS)));
+        .stdout(predicate::str::contains(format!(
+            "Record for {} removed.",
+            ALIAS
+        )));
 
     Ok(())
 }
@@ -194,7 +199,7 @@ fn ls_partial_search_isolated() -> Result<(), Box<dyn std::error::Error>> {
         .args(&["no_match"])
         .args(&["--password", PASSWORD])
         .assert()
-        .failure(); 
+        .failure();
 
     Ok(())
 }
@@ -227,14 +232,17 @@ fn ls_json_format_isolated() -> Result<(), Box<dyn std::error::Error>> {
 
     // verify structure
     assert!(json.is_array(), "Output should be a JSON array");
-    
+
     let array = json.as_array().unwrap();
     assert_eq!(array.len(), 2, "Should contain exactly 2 records");
 
     // check if the first entry contains the expected key
     let first_record = &array[0];
-    assert!(first_record.get("alias").is_some(), "Record missing 'alias' field");
-    
+    assert!(
+        first_record.get("alias").is_some(),
+        "Record missing 'alias' field"
+    );
+
     // verify specific content
     let has_apple = array.iter().any(|r| r["alias"] == "apple");
     assert!(has_apple, "JSON output missing 'apple' alias");
@@ -246,18 +254,19 @@ fn ls_json_format_isolated() -> Result<(), Box<dyn std::error::Error>> {
 fn test_migration_converts_legacy_to_json() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = NamedTempFile::new()?;
     // Create a legacy file
-    writeln!(file, "legacy:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1")?;
+    writeln!(
+        file,
+        "legacy:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1"
+    )?;
 
     // Run migrate
-    hermes(file.path())
-        .arg("migrate")
-        .assert()
-        .success();
+    hermes(file.path()).arg("migrate").assert().success();
 
     // Verify 'ls' now works (reads JSON))
     hermes(file.path())
         .arg("ls")
-        .write_stdin("password\n")
+        .arg("--password")
+        .arg(PASSWORD)
         .assert()
         .success()
         .stdout(predicate::str::contains("legacy"));
@@ -274,7 +283,10 @@ fn test_migration_converts_legacy_to_json() -> Result<(), Box<dyn std::error::Er
 fn test_ls_errors_on_legacy_format() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = NamedTempFile::new()?;
     // Create a legacy file
-    writeln!(file, "TEST:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1")?;
+    writeln!(
+        file,
+        "TEST:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1"
+    )?;
 
     hermes(file.path())
         .arg("ls")

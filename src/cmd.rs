@@ -5,7 +5,7 @@ use crate::otp;
 use crate::ui;
 use data_encoding::BASE32_NOPAD;
 use std::io;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
 fn sanitize_and_validate_code(code: &str) -> Result<String, String> {
     let clean = code.to_uppercase().replace("=", "");
@@ -20,8 +20,9 @@ fn get_effective_password(password: &Option<String>) -> String {
     password
         .clone()
         .or_else(|| std::env::var("HERMES_PASSWORD").ok())
-        .unwrap_or_else(|| rpassword::prompt_password("Enter password: ")
-            .expect("Failed to read password"))
+        .unwrap_or_else(|| {
+            rpassword::prompt_password("Enter password: ").expect("Failed to read password")
+        })
 }
 
 /* Validate code - check if it is a valid base32
@@ -85,12 +86,10 @@ pub fn add(
     file::ensure_dir_exists(path).map_err(|e| e.to_string())?;
 
     if file::file_exists(path) {
-        file::create_routine_backup(path)
-            .map_err(|e| format!("Warning: Backup failed: {}", e))?;
+        file::create_routine_backup(path).map_err(|e| format!("Warning: Backup failed: {}", e))?;
         file::append_to_file(path, &json_data).map_err(|e| e.to_string())?;
     } else {
-        file::overwrite_file(path, &json_data)
-            .map_err(|e| e.to_string())?;
+        file::overwrite_file(path, &json_data).map_err(|e| e.to_string())?;
     }
 
     println!("Record saved.");
@@ -132,16 +131,12 @@ pub fn update_code(
 }
 
 pub fn remove(path: &Path, alias: &str) -> Result<(), String> {
-    file::create_routine_backup(path)
-        .map_err(|e| format!("Warning: Backup failed: {}", e))?;
+    file::create_routine_backup(path).map_err(|e| format!("Warning: Backup failed: {}", e))?;
 
     let records = file::read_codex(path)?;
     let original_len = records.len();
 
-    let filtered_records: Vec<Record> = records
-        .into_iter()
-        .filter(|r| r.alias != alias)
-        .collect();
+    let filtered_records: Vec<Record> = records.into_iter().filter(|r| r.alias != alias).collect();
 
     if filtered_records.len() == original_len {
         return Err(format!("Error: No record for '{alias}' found"));
@@ -155,8 +150,7 @@ pub fn remove(path: &Path, alias: &str) -> Result<(), String> {
 
     let data = lines.join("\n") + "\n";
 
-    file::overwrite_file(path, &data)
-        .map_err(|e| format!("Error: Failed to save changes: {e}"))?;
+    file::overwrite_file(path, &data).map_err(|e| format!("Error: Failed to save changes: {e}"))?;
 
     println!("Record for {alias} removed.");
     Ok(())
@@ -173,7 +167,8 @@ pub fn ls(
     let records = file::read_codex(path)?;
 
     // apply search filter
-    let filtered: Vec<&Record> = records.iter()
+    let filtered: Vec<&Record> = records
+        .iter()
         .filter(|r| match alias_filter {
             // partial match
             Some(f) => r.alias.to_lowercase().contains(&f.to_lowercase()),
@@ -186,8 +181,7 @@ pub fn ls(
         return Err("Alias not found.".into());
     }
 
-    let needs_password = !*is_unencrypt && filtered.iter()
-        .any(|r| !r.is_unencrypted);
+    let needs_password = !*is_unencrypt && filtered.iter().any(|r| !r.is_unencrypted);
 
     let pass = if needs_password {
         get_effective_password(password)
@@ -199,11 +193,7 @@ pub fn ls(
 
     match format {
         OutputFormat::Json => print_json(&filtered, &pass, rem),
-        OutputFormat::Table => print_table(&filtered,
-            &pass,
-            rem,
-            alias_filter.is_some(),
-            quiet),
+        OutputFormat::Table => print_table(&filtered, &pass, rem, alias_filter.is_some(), quiet),
     }
 
     Ok(())
@@ -221,13 +211,7 @@ fn get_otp_display(record: &Record, pass: &str) -> String {
         .unwrap_or_else(|_| "Error Invalid secret or decryption failed".to_string())
 }
 
-fn print_table(
-    records: &[&Record],
-    pass: &str,
-    rem: u64,
-    is_single_alias: bool,
-    quiet: bool
-) {
+fn print_table(records: &[&Record], pass: &str, rem: u64, is_single_alias: bool, quiet: bool) {
     if is_single_alias && records.len() == 1 {
         let code = get_otp_display(records[0], pass);
         ui::print_otp_with_progress(&code, rem, quiet);
@@ -243,15 +227,18 @@ fn print_table(
 }
 
 fn print_json(records: &[&Record], pass: &str, rem: u64) {
-    let list: Vec<serde_json::Value> = records.iter().map(|r| {
-        serde_json::json!({
-            "alias": r.alias,
-            "otp": get_otp_display(r, pass),
-            "remaining_secs": rem,
-            "is_encrypted": !r.is_unencrypted,
-            "created_at": r.created_at
+    let list: Vec<serde_json::Value> = records
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "alias": r.alias,
+                "otp": get_otp_display(r, pass),
+                "remaining_secs": rem,
+                "is_encrypted": !r.is_unencrypted,
+                "created_at": r.created_at
+            })
         })
-    }).collect();
+        .collect();
     println!("{}", serde_json::to_string_pretty(&list).unwrap());
 }
 
@@ -261,19 +248,18 @@ pub fn migrate(path: &PathBuf) -> io::Result<()> {
     println!("Backup created at {:?}", backup_path);
 
     // read and parse everything using the hybrid parser
-    let records = file::read_codex(path)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let records =
+        file::read_legacy_raw(path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+    // Serialize to JSON format
     let migrated_records: Vec<String> = records
         .iter()
         .map(|record| serde_json::to_string(record).expect("Failed to serialize"))
         .collect();
 
     let count = migrated_records.len();
-
     let new_content = migrated_records.join("\n") + "\n";
 
-    // Write back to the original file
     file::overwrite_file(path, &new_content)?;
 
     println!("Successfully migrated {count} records to JSON format.");
@@ -299,7 +285,7 @@ pub fn rename(path: &PathBuf, old_alias: &str, new_alias: &str) -> Result<(), St
         if record.alias == old_alias {
             record.alias = new_alias.to_string();
             found = true;
-            break; 
+            break;
         }
     }
 
@@ -307,8 +293,7 @@ pub fn rename(path: &PathBuf, old_alias: &str, new_alias: &str) -> Result<(), St
         return Err(format!("Alias '{}' not found.", old_alias));
     }
 
-    file::create_routine_backup(path)
-        .map_err(|e| format!("Warning: Backup failed: {}", e))?;
+    file::create_routine_backup(path).map_err(|e| format!("Warning: Backup failed: {}", e))?;
 
     let lines: Vec<String> = records
         .iter()
@@ -317,8 +302,7 @@ pub fn rename(path: &PathBuf, old_alias: &str, new_alias: &str) -> Result<(), St
 
     let data = lines.join("\n") + "\n";
 
-    file::overwrite_file(path, &data)
-        .map_err(|e| format!("Error saving changes: {e}"))?;
+    file::overwrite_file(path, &data).map_err(|e| format!("Error saving changes: {e}"))?;
 
     println!("Successfully renamed '{}' to '{}'", old_alias, new_alias);
     Ok(())
