@@ -48,13 +48,13 @@ pub fn read_codex(path: &Path) -> Result<Vec<Record>, String> {
 }
 
 pub fn append_to_file(path: &Path, data: &str) -> io::Result<()> {
-    let mut data_file = OpenOptions::new().append(true).open(path)?;
+    let mut data_file = OpenOptions::new().append(true).create(true).open(path)?;
     writeln!(data_file, "{}", data.trim())
 }
 
 pub fn overwrite_file(path: &Path, data: &str) -> io::Result<()> {
-    let line = String::from(data) + "\n";
-    std::fs::write(path, line)
+    let content = format!("{}\n", data.trim());
+    std::fs::write(path, content)
 }
 
 pub fn alias_exists(alias: &str, path: &Path) -> bool {
