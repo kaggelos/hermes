@@ -297,3 +297,36 @@ fn test_ls_errors_on_legacy_format() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_ls_handles_mashed_json_records() -> Result<(), Box<dyn std::error::Error>> {
+    let file = NamedTempFile::new()?;
+    let path = file.path();
+
+    // Manually construct raw JSON strings
+    let record1 = format!(
+        r#"{{"alias":"github","secret":"{}","is_unencrypted":true,"algorithm":"sha256","created_at":1700000000}}"#,
+        CODE
+    );
+    let record2 = format!(
+        r#"{{"alias":"google","secret":"{}","is_unencrypted":true,"algorithm":"sha256","created_at":1700000001}}"#,
+        CODE
+    );
+    let mashed_json = format!("{}{}", record1, record2);
+
+    std::fs::write(file.path(), mashed_json)?;
+
+    let assert = hermes(path)
+        .arg("ls")
+        .args(&["--password", PASSWORD])
+        .assert();
+
+    assert
+        .success()
+        .stdout(predicates::str::contains("github"))
+        .stdout(predicates::str::contains("google"))
+        .stdout(predicates::str::contains("{\"alias\"").not())
+        .stdout(predicates::str::contains("Error").not());
+
+    Ok(())
+}
