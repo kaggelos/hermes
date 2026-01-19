@@ -32,7 +32,6 @@ pub struct EncryptArgs {
 pub enum Commands {
     /// Adds code to the hermes
     Add {
-        #[clap(short = 'a', long)]
         alias: String,
         #[clap(short = 'c', long)]
         code: String,
@@ -40,13 +39,9 @@ pub enum Commands {
         encryption: EncryptArgs,
     },
     /// Remove code from the hermes
-    Remove {
-        #[clap(short = 'a', long)]
-        alias: String,
-    },
+    Remove { alias: String },
     /// Update code by alias
     Update {
-        #[clap(short = 'a', long)]
         alias: String,
         #[clap(short = 'c', long)]
         code: String,
@@ -60,7 +55,6 @@ pub enum Commands {
     },
     /// Get codes for all/alias records
     Ls {
-        #[clap(short = 'a', long)]
         alias: Option<String>,
         #[clap(short, long)]
         quiet: bool,

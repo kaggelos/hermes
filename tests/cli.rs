@@ -1,5 +1,6 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
+use std::io::Write;
 use tempfile::NamedTempFile;
 
 const CODE: &str = "BQZH47HMIUUQOQVAXO3MCRUP3OGR3OIL";
@@ -7,16 +8,18 @@ const ALIAS: &str = "test_simple";
 const PASSWORD: &str = "password";
 
 /// helper fn hermes pointing to a temp file
-fn hermes(path: &std::path::Path) -> Command {
-    let mut cmd = Command::cargo_bin("hermes").expect("binary exists");
+fn hermes(path: &std::path::Path) -> assert_cmd::Command {
+    let mut cmd = cargo_bin_cmd!("hermes");
     cmd.arg("--path").arg(path);
     cmd
 }
 
 #[test]
 fn fail_run_with_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    Command::cargo_bin("hermes")
-        .expect("binary exists")
+    let file = NamedTempFile::new()?;
+    let path = file.path();
+
+    hermes(path)
         .assert()
         .failure()
         .code(2)
@@ -29,16 +32,19 @@ fn fail_run_with_no_args() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn fail_add_missing_args() -> Result<(), Box<dyn std::error::Error>> {
     let file = NamedTempFile::new()?;
-    
+    let path = file.path();
+
     // 'add' fails without -a and -c
-    Command::cargo_bin("hermes")?
+    hermes(path)
         .arg("--path")
         .arg(file.path())
         .arg("add")
         .assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains("the following required arguments were not provided"));
+        .stderr(predicate::str::contains(
+            "the following required arguments were not provided",
+        ));
 
     Ok(())
 }
@@ -50,16 +56,19 @@ fn add_remove_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     hermes(path)
         .arg("add")
-        .args(&["-a", ALIAS, "-c", CODE, "--password", PASSWORD])
+        .args(&[ALIAS, "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
     hermes(path)
         .arg("remove")
-        .args(&["-a", ALIAS])
+        .args(&[ALIAS])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("Record for {} removed.", ALIAS)));
+        .stdout(predicate::str::contains(format!(
+            "Record for {} removed.",
+            ALIAS
+        )));
 
     Ok(())
 }
@@ -73,21 +82,21 @@ fn add_update_remove_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     hermes(path)
         .arg("add")
-        .args(&["-a", alias, "-c", CODE, "--password", PASSWORD])
+        .args(&[alias, "-c", CODE, "--password", PASSWORD])
         .assert()
         .success()
         .stdout(predicate::str::is_match("[0-9]{6}")?);
 
     hermes(path)
         .arg("update")
-        .args(&["-a", alias, "-c", CODE, "--password", PASSWORD])
+        .args(&[alias, "-c", CODE, "--password", PASSWORD])
         .assert()
         .success()
         .stdout(predicate::str::contains(&stdout_removed));
 
     hermes(path)
         .arg("remove")
-        .args(&["-a", alias])
+        .args(&[alias])
         .assert()
         .success()
         .stdout(predicate::str::contains(stdout_removed));
@@ -103,13 +112,13 @@ fn rename_alias_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
     // add two initial records
     hermes(path)
         .arg("add")
-        .args(&["-a", "github", "-c", CODE, "--password", PASSWORD])
+        .args(&["github", "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
     hermes(path)
         .arg("add")
-        .args(&["-a", "google", "-c", CODE, "--password", PASSWORD])
+        .args(&["google", "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
@@ -124,7 +133,7 @@ fn rename_alias_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
     // verify: new alias exists, old alias is gone
     hermes(path)
         .arg("ls")
-        .args(&["-a", "gh"])
+        .args(&["gh"])
         .args(&["--password", PASSWORD])
         .assert()
         .success()
@@ -132,7 +141,7 @@ fn rename_alias_isolated_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     hermes(path)
         .arg("ls")
-        .args(&["-a", "github"])
+        .args(&["github"])
         .args(&["--password", PASSWORD])
         .assert()
         .failure()
@@ -157,26 +166,26 @@ fn ls_partial_search_isolated() -> Result<(), Box<dyn std::error::Error>> {
     // add multiple records with similar prefixes
     hermes(path)
         .arg("add")
-        .args(&["-a", "google", "-c", CODE, "--password", PASSWORD])
+        .args(&["google", "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
     hermes(path)
         .arg("add")
-        .args(&["-a", "goodreads", "-c", CODE, "--password", PASSWORD])
+        .args(&["goodreads", "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
     hermes(path)
         .arg("add")
-        .args(&["-a", "github", "-c", CODE, "--password", PASSWORD])
+        .args(&["github", "-c", CODE, "--password", PASSWORD])
         .assert()
         .success();
 
     // test partial search: "goo" should return google and goodreads only
     hermes(path)
         .arg("ls")
-        .args(&["-a", "goo"])
+        .args(&["goo"])
         .args(&["--password", PASSWORD])
         .assert()
         .success()
@@ -187,10 +196,10 @@ fn ls_partial_search_isolated() -> Result<(), Box<dyn std::error::Error>> {
     // test non-matching search
     hermes(path)
         .arg("ls")
-        .args(&["-a", "no_match"])
+        .args(&["no_match"])
         .args(&["--password", PASSWORD])
         .assert()
-        .failure(); 
+        .failure();
 
     Ok(())
 }
@@ -205,7 +214,7 @@ fn ls_json_format_isolated() -> Result<(), Box<dyn std::error::Error>> {
     for (alias, code) in &entries {
         hermes(path)
             .arg("add")
-            .args(&["-a", alias, "-c", code, "--password", PASSWORD])
+            .args(&[alias, "-c", code, "--password", PASSWORD])
             .assert()
             .success();
     }
@@ -223,17 +232,101 @@ fn ls_json_format_isolated() -> Result<(), Box<dyn std::error::Error>> {
 
     // verify structure
     assert!(json.is_array(), "Output should be a JSON array");
-    
+
     let array = json.as_array().unwrap();
     assert_eq!(array.len(), 2, "Should contain exactly 2 records");
 
     // check if the first entry contains the expected key
     let first_record = &array[0];
-    assert!(first_record.get("alias").is_some(), "Record missing 'alias' field");
-    
+    assert!(
+        first_record.get("alias").is_some(),
+        "Record missing 'alias' field"
+    );
+
     // verify specific content
     let has_apple = array.iter().any(|r| r["alias"] == "apple");
     assert!(has_apple, "JSON output missing 'apple' alias");
+
+    Ok(())
+}
+
+#[test]
+fn test_migration_converts_legacy_to_json() -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = NamedTempFile::new()?;
+    // Create a legacy file
+    writeln!(
+        file,
+        "legacy:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1"
+    )?;
+
+    // Run migrate
+    hermes(file.path()).arg("migrate").assert().success();
+
+    // Verify 'ls' now works (reads JSON))
+    hermes(file.path())
+        .arg("ls")
+        .arg("--password")
+        .arg(PASSWORD)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("legacy"));
+
+    // Peek at the file to confirm it's JSON
+    let content = std::fs::read_to_string(file.path())?;
+    assert!(content.starts_with('{'));
+    assert!(content.contains("\"alias\":\"legacy\""));
+
+    Ok(())
+}
+
+#[test]
+fn test_ls_errors_on_legacy_format() -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = NamedTempFile::new()?;
+    // Create a legacy file
+    writeln!(
+        file,
+        "TEST:v7dWnFhl7fwqXIbmawhebdHS3NoJGyCy6XnrqlKRk7+ArTf/KmpvNP2c2x7Hkcgu:0:sha1"
+    )?;
+
+    hermes(file.path())
+        .arg("ls")
+        .assert()
+        .failure() // expect it to fail now
+        .stderr(predicate::str::contains("Legacy file format detected"))
+        .stderr(predicate::str::contains("hermes migrate"));
+
+    Ok(())
+}
+
+#[test]
+fn test_ls_handles_mashed_json_records() -> Result<(), Box<dyn std::error::Error>> {
+    let file = NamedTempFile::new()?;
+    let path = file.path();
+
+    // Manually construct raw JSON strings
+    let record1 = format!(
+        r#"{{"alias":"github","secret":"{}","is_unencrypted":true,"algorithm":"sha256","created_at":1700000000}}"#,
+        CODE
+    );
+    let record2 = format!(
+        r#"{{"alias":"google","secret":"{}","is_unencrypted":true,"algorithm":"sha256","created_at":1700000001}}"#,
+        CODE
+    );
+    let mashed_json = format!("{}{}", record1, record2);
+
+    std::fs::write(file.path(), mashed_json)?;
+
+    let assert = hermes(path)
+        .arg("ls")
+        .args(&["--password", PASSWORD])
+        .assert();
+
+    assert
+        .success()
+        .stdout(predicates::str::contains("github"))
+        .stdout(predicates::str::contains("google"))
+        .stdout(predicates::str::contains("{\"alias\"").not())
+        .stdout(predicates::str::contains("Error").not());
 
     Ok(())
 }
