@@ -4,8 +4,10 @@ use crate::models::Record;
 use crate::otp;
 use crate::ui;
 use data_encoding::BASE32_NOPAD;
-use std::io;
+use std::{io, thread};
 use std::path::{PathBuf, Path};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
 use console::Term;
@@ -198,24 +200,34 @@ pub fn ls(
     };
 
     let mut rem = otp::get_remaining_seconds();
-    let term = Term::stdout();
     match format {
         OutputFormat::Json => print_json(&filtered, &pass, rem),
         OutputFormat::Table =>
             {
+                let term = Arc::new(Term::stdout());
+                let term_ref = term.clone();
+                term.hide_cursor();
                 print_table(&filtered,
                             &pass,
                             &rem);
+                let flag = Arc::new(AtomicBool::new(false));
+                let mut flag_ref = Arc::clone(&flag);
+                thread::spawn(move || {
+                    term_ref.read_key().unwrap();
+                    flag_ref.store(true, Ordering::Relaxed);
+                });
+                println!("Press any key to exit");
+                term.move_cursor_up(1);
                 sleep(Duration::from_millis(100));
-                loop {
+                while flag.load(Ordering::Relaxed) == false {
                     rem = otp::get_remaining_seconds();
-                    term.move_cursor_up(filtered.len()+2);
-                    term.clear_to_end_of_screen();
+                    term.move_cursor_up(filtered.len() + 2);
                     print_table(&filtered,
                                 &pass,
                                 &rem);
                     sleep(Duration::from_millis(100));
                 }
+                term.show_cursor();
             }
     }
 
@@ -249,7 +261,7 @@ fn print_table(
     println!("{:-<15}-|-{:-<10}-|-{:-<4}", "", "", "");
     for r in records {
         let otp = get_otp_display(r, pass);
-        println!("{0: <15} | {1: <10} | {2:}s [{3}{4}]", r.alias, otp, *rem, "#".repeat(filled), ".".repeat(empty));
+        println!("{0: <15} | {1: <10} | {2: <3} [{3}{4}]", r.alias, otp, (*rem).to_string() + "s", "#".repeat(filled), ".".repeat(empty));
     }
 }
 
