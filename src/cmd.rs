@@ -195,10 +195,10 @@ pub fn ls(
         OutputFormat::Table =>
             {
                 if quiet  {
-                    print_table(&filtered, &pass, rem, quiet);
+                    print_table(&filtered, &pass, rem, alias_filter.is_some(), quiet);
                 }
                 else {
-                    let table = Table::new(&filtered, &pass);
+                    let table = Table::new(&filtered, &pass, alias_filter.is_some());
                     table.render();
                 }
             }
@@ -223,10 +223,9 @@ pub fn print_table(
     records: &[&Record],
     pass: &str,
     rem: u64,
+    is_single_alias: bool,
     quiet: bool
 ) {
-    println!("{0: <15} | {1: <10} | {2: <4}", "Alias", "OTP", "Rem");
-    println!("{:-<15}-|-{:-<10}-|-{:-<4}", "", "", "");
     let mut bar = String::from("");
     if !quiet {
         let bar_width = 20;
@@ -236,9 +235,19 @@ pub fn print_table(
         let empty = bar_width - filled;
         bar = format!("[{0}{1}]", "#".repeat(filled), ".".repeat(empty));
     }
-    for r in records {
-        let otp = get_otp_display(r, pass);
-        println!("{0: <15} | {1: <10} | {2: <3} {3}", r.alias, otp, rem.to_string() + "s", bar);
+    if is_single_alias && records.len() == 1 {
+        let otp = get_otp_display(records[0], pass);
+        if !quiet {
+            eprintln!("{0} {1: <3} remaining", bar, rem.to_string() + "s");
+        }
+        println!("{}", otp);
+    } else {
+        println!("{0: <15} | {1: <10} | {2: <4}", "Alias", "OTP", "Rem");
+        println!("{:-<15}-|-{:-<10}-|-{:-<4}", "", "", "");
+        for r in records {
+            let otp = get_otp_display(r, pass);
+            println!("{0: <15} | {1: <10} | {2: <3} {3}", r.alias, otp, rem.to_string() + "s", bar);
+        }
     }
 }
 
