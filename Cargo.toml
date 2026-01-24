@@ -12,7 +12,7 @@ repository = "https://github.com/riccione/hermes"
 [profile.release]
 strip = true
 lto = true
-panic = "abort"
+#panic = "abort"
 opt-level = "z"
 
 [dependencies]

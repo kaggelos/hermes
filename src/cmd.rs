@@ -2,15 +2,10 @@ use crate::args::OutputFormat;
 use crate::file;
 use crate::models::Record;
 use crate::otp;
-use crate::ui;
 use data_encoding::BASE32_NOPAD;
-use std::{io, thread};
+use std::io;
 use std::path::{PathBuf, Path};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::sleep;
-use std::time::Duration;
-use console::Term;
+use crate::ui::Table;
 
 fn sanitize_and_validate_code(code: &str) -> Result<String, String> {
     let clean = code.to_uppercase().replace("=", "");
@@ -199,35 +194,18 @@ pub fn ls(
         String::new()
     };
 
-    let mut rem = otp::get_remaining_seconds();
+    let rem = otp::get_remaining_seconds();
     match format {
         OutputFormat::Json => print_json(&filtered, &pass, rem),
         OutputFormat::Table =>
             {
-                let term = Arc::new(Term::stdout());
-                let term_ref = term.clone();
-                term.hide_cursor();
-                print_table(&filtered,
-                            &pass,
-                            &rem);
-                let flag = Arc::new(AtomicBool::new(false));
-                let mut flag_ref = Arc::clone(&flag);
-                thread::spawn(move || {
-                    term_ref.read_key().unwrap();
-                    flag_ref.store(true, Ordering::Relaxed);
-                });
-                println!("Press any key to exit");
-                term.move_cursor_up(1);
-                sleep(Duration::from_millis(100));
-                while flag.load(Ordering::Relaxed) == false {
-                    rem = otp::get_remaining_seconds();
-                    term.move_cursor_up(filtered.len() + 2);
-                    print_table(&filtered,
-                                &pass,
-                                &rem);
-                    sleep(Duration::from_millis(100));
+                if quiet  {
+                    print_table(&filtered, &pass, rem, quiet);
                 }
-                term.show_cursor();
+                else {
+                    let table = Table::new(&filtered, &pass);
+                    table.render();
+                }
             }
     }
 
@@ -246,22 +224,26 @@ fn get_otp_display(record: &Record, pass: &str) -> String {
         .unwrap_or_else(|_| "Error Invalid secret or decryption failed".to_string())
 }
 
-fn print_table(
+pub fn print_table(
     records: &[&Record],
     pass: &str,
-    rem: &u64,
+    rem: u64,
+    quiet: bool
 ) {
-    let bar_width = 20;
-    let safe_rem = (*rem).min(30) as usize;
-
-    let filled = (safe_rem * bar_width) / 30;
-    let empty = bar_width - filled;
-
     println!("{0: <15} | {1: <10} | {2: <4}", "Alias", "OTP", "Rem");
     println!("{:-<15}-|-{:-<10}-|-{:-<4}", "", "", "");
+    let mut bar = String::from("");
+    if !quiet {
+        let bar_width = 20;
+        let safe_rem = rem.min(30) as usize;
+
+        let filled = (safe_rem * bar_width) / 30;
+        let empty = bar_width - filled;
+        bar = format!("[{0}{1}]", "#".repeat(filled), ".".repeat(empty));
+    }
     for r in records {
         let otp = get_otp_display(r, pass);
-        println!("{0: <15} | {1: <10} | {2: <3} [{3}{4}]", r.alias, otp, (*rem).to_string() + "s", "#".repeat(filled), ".".repeat(empty));
+        println!("{0: <15} | {1: <10} | {2: <3} {3}", r.alias, otp, rem.to_string() + "s", bar);
     }
 }
 
