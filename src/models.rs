@@ -29,7 +29,7 @@ impl Record {
     }
 
     /// Attempts to parse line into a Record, supports both JSON and Legacy (text)
-    pub fn from_line(line: &str) -> Option<Self> {
+    pub fn from_legacy_line(line: &str) -> Option<Self> {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             return None;

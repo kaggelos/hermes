@@ -51,7 +51,7 @@ fn run(command: Commands, codex_path: PathBuf) -> Result<(), String> {
         }
 
         Commands::Remove { alias } => {
-            cmd::remove(&codex_path, &alias)?; 
+            cmd::remove(&codex_path, &alias)?;
         }
 
         Commands::Update {
@@ -92,15 +92,14 @@ fn run(command: Commands, codex_path: PathBuf) -> Result<(), String> {
         }
 
         Commands::Config {} => {
-            codex_path.exists()
+            codex_path
+                .exists()
                 .then(|| println!("{}", codex_path.display()))
-                .ok_or_else(|| format!("Codex file does not exists at {}",
-                        codex_path.display()))?;
+                .ok_or_else(|| format!("Codex file does not exists at {}", codex_path.display()))?;
         }
 
         Commands::Migrate => {
-            cmd::migrate(&codex_path)
-                .map_err(|e| format!("Migration failed: {e}"))?;
+            cmd::migrate(&codex_path).map_err(|e| format!("Migration failed: {e}"))?;
         }
     }
     Ok(())
