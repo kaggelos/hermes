@@ -268,6 +268,7 @@ fn test_migration_converts_legacy_to_json() -> Result<(), Box<dyn std::error::Er
         .arg("ls")
         .arg("--password")
         .arg(PASSWORD)
+        .arg("-q")
         .assert()
         .success()
         .stdout(predicate::str::contains("legacy"));
